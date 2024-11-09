@@ -67,7 +67,7 @@ targetCRS <- CRS("+proj=longlat +ellps=WGS84 +datum=WGS84")
 variables <- projectRaster(variables, crs = targetCRS)
 
 #preparing occurs to loop-------------------------------
-# Lista de espécies
+#Species list
 study_sp <- c("Oxysarcodexia amorosa", "Oxysarcodexia xanthosoma",
               "Lipoptilocnema crispula", "Lipoptilocnema crispina", "Oxysarcodexia amorosa_1", "Oxysarcodexia amorosa_2", 
               "Oxysarcodexia amorosa_3", "Oxysarcodexia amorosa_4", "Oxysarcodexia amorosa_5",
@@ -103,29 +103,29 @@ for(i in 1:length(study_sp)){
   species_df <- occ[occ$nome_cientifico == study_sp[i], ]
   
   #running setup_sdmdata
-  setup_sdmdata(species_name = study_sp[i],
-                occurrences = as.data.frame(species_df),
-                predictors = variables,
-                lon = "longitude",
-                lat = "latitude",
-                models_dir = model_folder, # folder to save partitions
-                partition_type = "crossvalidation",
-                cv_partitions = 5,
-                cv_n = 1,
+  setup_sdmdata(species_name = study_sp[i],              #filtering the species name for this iteration
+                occurrences = as.data.frame(species_df), #transforming the tible of occurrences in df
+                predictors = variables,                  #name of raster stack with the variables
+                lon = "longitude",                       #name of longitude column
+                lat = "latitude",                        #name of latitude column
+                models_dir = model_folder,               #folder to save partitions
+                partition_type = "crossvalidation",      #crossvalidation is a way to partition data without replacement
+                cv_partitions = 5,                       #number of parts that the occurrences will be divided into
+                cv_n = 1,                                #how many times this partitions will be separed
                 seed = 512,
-                buffer_type = "mean",
-                env_filter = TRUE,
-                env_distance = "centroid",
-                min_env_dist = 0.4,
-                png_sdmdata = TRUE,
-                n_back = nrow(species_df) * 10,
-                clean_dupl = TRUE,
-                clean_uni = FALSE,
-                clean_nas = TRUE,
-                geo_filt = FALSE,
-                select_variables = TRUE,
-                sample_proportion = 0.5,
-                cutoff = 0.7)
+                buffer_type = "mean",                    #Shows whether the buffer should be calculated, in this case, using the "mean" distance between occurrence points
+                env_filter = TRUE,                       #filter used to exclude pseudoabsence from very close to the occurrences point
+                env_distance = "centroid",               #type of enviromental distance, the distance of each raster pixel to the environmental centroid of the distribution
+                min_env_dist = 0.4,                      #Sets a minimum value to exclude the areas closest (in the environmental space) to the occurrences or their centroid, expressed in quantiles, from 0 (the closest) to 1
+                png_sdmdata = TRUE,                      #Save the data in a png file
+                n_back = nrow(species_df) * 10,          #number of pseudoabsences (in this case, 10x number of occurrences)
+                clean_dupl = TRUE,                       #removes points with the same longitude and latitude
+                clean_uni = FALSE,                       #selects only one point per pixel
+                clean_nas = TRUE,                        #removes points that are outside the bounds of the raster
+                geo_filt = FALSE,                        #delete occurrences that are too close to each other
+                select_variables = TRUE,                 #Whether a variable selection should be performed. It excludes highly correlated environmental variables
+                sample_proportion = 0.5,                 #Proportion of the raster values to be sampled to calculate the correlation. The value should be set as a decimal, between 0 and 1
+                cutoff = 0.7)                            #Cutoff value of correlation between variables to exclude environmental layers
 }
 
 # modleR 2/3: model calibration -------------------------------------------
@@ -134,9 +134,9 @@ for(i in 1:length(study_sp)){
   
   # run selected algorithms for each partition
   do_any(species_name = study_sp[i],
-         algorithm = "maxent",
-         predictors = variables,
-         models_dir = model_folder, # folder to save partitions
+         algorithm = "maxent",              #chosen algorithm
+         predictors = variables,            #name of raster stack with variables
+         models_dir = model_folder,         #folder to save partitions
          png_partitions = TRUE,
          write_bin_cut = FALSE,
          equalize = TRUE,
@@ -151,9 +151,9 @@ for(i in 1:length(study_sp)){
   final_model(species_name = study_sp[i],
               algorithms = NULL,
               models_dir = model_folder,
-              scale_models = TRUE, # convert model outputs to 0-1
-              which_models = c("raw_mean", "raw_mean_th"), 
-              mean_th_par = "spec_sens",
+              scale_models = TRUE,                           #convert model outputs to 0-1
+              which_models = c("raw_mean", "raw_mean_th"),   #export both binary and continuous map  
+              mean_th_par = "spec_sens",                     #maximizes the best configuration for both omission and commission errors
               png_final = TRUE,
               overwrite = TRUE)
   

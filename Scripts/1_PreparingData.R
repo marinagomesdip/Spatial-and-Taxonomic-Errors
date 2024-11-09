@@ -16,12 +16,13 @@ dadoslimpos <- read_csv("./Data/Processados/4_dadoslimpos.csv")
 #Removing occurence data before 1970 to mach with WorlClim enviromental
 dadoslimpos <- dadoslimpos %>%
   filter(ano_inicio >= 1970)
-  
+
+#Filtering the species name to create separate objetcs to work on  
 #Species group 1 - Lipoptlocnema crispula & crispina ------------------------------------ 
 crispina <- dadoslimpos %>%
-  filter(nome_cientifico == "Lipoptilocnema crispina") %>%
-  dplyr::select(nome_cientifico, latitude, longitude) %>%
-  distinct()
+  filter(nome_cientifico == "Lipoptilocnema crispina") %>%   #filter only target species
+  dplyr::select(nome_cientifico, latitude, longitude) %>%    #select the columns that are important to SDM
+  distinct()                                                 #clean duplicates 
 
 crispula <- dadoslimpos %>%
   filter(nome_cientifico == "Lipoptilocnema crispula") %>%
@@ -39,18 +40,19 @@ amorosa <- dadoslimpos %>%
   dplyr::select(nome_cientifico, latitude, longitude) %>%
   distinct()
 
+#Uniting all species in only one dataset to loop SDM ------------------------------
 completo <- bind_rows(amorosa, crispina, crispula, xanthosoma) 
 
 #ERROR 1 - POSITIONAL ERROR (RANDOM COORDS) --------------------------------------------
 #Creating a function to generate datasets with radom coords --------------------------
 adding_random_coords <- function(dados, especie, rast_mask, prop = 0.1, num_iteracoes = 10) {
-  dados_gerados <- list()  # Lista para armazenar os dataframes gerados
+  dados_gerados <- list()  # List to store the generated dataframes
   
   for (i in 1:num_iteracoes) {
     # Filter the dataframe for the specific species
     especie_dados <- dados %>% filter(nome_cientifico == especie)
     
-    # Calculating % of the total coordinates = value of prop
+    # Calculating % of the total coordinates = value of prop (we used 10%)
     n <- round(nrow(especie_dados) * prop)
     
     # create raster mask for point sampling
@@ -59,7 +61,8 @@ adding_random_coords <- function(dados, especie, rast_mask, prop = 0.1, num_iter
                     xmax=-30,
                     ymin=-60, 
                     ymax=30)))
-      
+    
+    # Generate random points inside the delimited area  
     pontos_aleatorios <- dismo::randomPoints(rmask, n)
     
     # Create a column "error" with "no" for the original data
@@ -73,23 +76,25 @@ adding_random_coords <- function(dados, especie, rast_mask, prop = 0.1, num_iter
     especie_dados$longitude[linhas_substituidas] <- pontos_aleatorios[, 1]
     especie_dados$erro[linhas_substituidas] <- "sim"
     
-    # Adiciona o dataframe gerado à lista com um nome de espécie modificado
+    # Adds the generated dataframe to the list with a species name + number
     nome_especie_modificado <- paste0(especie, "_", i)
     dados_gerados[[i]] <- especie_dados %>% mutate(nome_cientifico = nome_especie_modificado)
   }
   
-    # Combina todos os dataframes gerados de volta ao dataframe original
+    # Combines all the generated dataframes back into the original dataframe
   dados_atualizados <- bind_rows(dados_gerados)
   
   return(dados_atualizados)
 }
 
+# Creating a list with the species names to which the function will be applied
 study_sp <- c( "Oxysarcodexia amorosa", "Lipoptilocnema crispina",
               "Lipoptilocnema crispula", "Oxysarcodexia xanthosoma")
 
+# Creating an object as a copy of the original dataframe
 completo_atualizado <- completo  
 
-# Agora e necessario carregar um raster para usar como mascara dos oceanos
+# Loading a raster to use as a mask for the oceans
 rast_mask <- raster("./Enviromental_data/wc2.1_10m_bio_1.tif")
 
 #Aplying the function to all species of dataframe
@@ -102,43 +107,43 @@ for (i in 1:length(study_sp)) {
 #ERROR 2 - TAXONOMIC ERROR (SPECIES COORDS)-------------------------------------------- 
 #Creating a function to generate datasets with taxonomic errors --------------------------
 adding_taxonomic_error <- function(dados, especie1, prop = 0.1, num_iteracoes = 10) {
-  dados_gerados <- list()  # Lista para armazenar os dataframes gerados
+  dados_gerados <- list()  # # List to store the generated dataframes
   
   for (i in 1:num_iteracoes) {
-    # Filtrar o dataframe para a espécie1
+    # Filtering the dataframe for species1
     especie1_dados <- dados %>% 
       filter(nome_cientifico == especie1)
     
-    # Filtrar o dataframe para a espécie2 que precisa ser do mesmo gênero
+    # Filter the dataframe for species2, ensuring it belongs to the same genus
     especie2 <- dados %>%
       dplyr::filter(genero == first(especie1_dados$genero)) %>%
       filter(nome_cientifico != first(especie1_dados$nome_cientifico))
     
-    # Calculating % of the total coordinates = value of prop
+    # Calculating % of the total coordinates = value of prop (we used 10%)
     n <- round(nrow(especie1_dados) * prop)
     
-    # Selecionar aleatoriamente as linhas que serão substituídas na espécie1
+    # Randomly select the rows that will be replaced in species1
     linhas_substituir_sp1 <- sample(1:nrow(especie1_dados), n)
     
-    # Selecionar aleatoriamente as linhas das espécies do mesmo gênero que serão utilizadas para substituição
+    # Randomly select the rows of species from the same genus that will be used for replacement
     linhas_substituir_sp2 <- sample(1:nrow(especie2), n)
     
-    # Criar uma coluna "erro" com "não" para os dados originais da espécie1
+    # Create a column "error" with "no" for the original data of species1
     especie1_dados$erro <- "nao"
     
-    # Substituir as coordenadas nas linhas da espécie1 com as das espécies do mesmo gênero
+    # Replace the coordinates in the rows of species1 with those of species from the same genus
     especie1_dados$latitude[linhas_substituir_sp1] <- especie2$latitude[linhas_substituir_sp2]
     especie1_dados$longitude[linhas_substituir_sp1] <- especie2$longitude[linhas_substituir_sp2]
     
-    # Adicionar as novas linhas ao dataframe original com a coluna "erro" como "sim"
+    # Add the new rows to the original dataframe with the "error" column set to "yes"
     especie1_dados$erro[linhas_substituir_sp1] <- "sim"
     
-    # Adiciona o dataframe gerado à lista com um nome de espécie modificado
+    # Add the generated dataframe to the list with a modified species name
     nome_especie_modificado <- paste0(especie1, "_", i + 10)
     dados_gerados[[i]] <- especie1_dados %>% mutate(nome_cientifico = nome_especie_modificado)
   }
   
-  # Combina todos os dataframes gerados de volta ao dataframe original
+  # Combine all generated dataframes back into the original dataframe
   dados_atualizados <- bind_rows(dados_gerados)
   
   return(dados_atualizados)
@@ -157,7 +162,6 @@ for (i in 1:length(study_sp)) {
 #Uniting the dataframes to export one csv
 completo_atualizado_taxonomic_error <- completo_atualizado_taxonomic_error %>%
   select(-genero, -especie)
-
 final <- union(completo_atualizado, completo_atualizado_taxonomic_error)
 
 #exporting the final csv

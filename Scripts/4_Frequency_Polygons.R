@@ -3,13 +3,15 @@
 #Marina Morim Gomes 2023
 #gomes.mari.95@gmail.com
 
-#loading packages -------------------------------------
+#loading packages ----------------------------------------------------------
 library(tidyverse)
 library(raster)
 library(sf)
 library(tmap)
 
-#Criando uma lista de espécies para rodar os loops
+#loading data ------------------------------------------------------------------
+occs <-  read_csv("./Data/Processados/6_para_rodar_modelagem.csv")     #occurrence point
+#Creating a species list to run the loops -----------------------------------
 study_sp <- c("Oxysarcodexia amorosa", "Oxysarcodexia xanthosoma",
               "Lipoptilocnema crispula", "Lipoptilocnema crispina")
 
@@ -80,58 +82,9 @@ for(i in 1:length(study_sp)){
   writeRaster(desvio_padrao, filename = paste0("./cap2/media/", study_sp[i], "_error2desvio.tif"), format = "GTiff")
 }
 
-#SD MAPS ----------------------------------------------------------------------
-
-amorosa <- raster("./cap2/media/Oxysarcodexia amorosa_error1desvio.tif")
-amorosa2 <- raster("./cap2/media/Oxysarcodexia amorosa_error2desvio.tif")
-xanthosoma <- raster("./cap2/media/Oxysarcodexia xanthosoma_error1desvio.tif")
-xanthosoma2 <- raster("./cap2/media/Oxysarcodexia xanthosoma_error2desvio.tif")
-
-# Extensão do recorte
-nova_extensao <- extent(-115, -30, -35, 40)
-
-# Cortar na região alvo
-amorosa <- crop(amorosa, nova_extensao)
-amorosa2 <- crop(amorosa2, nova_extensao)
-xanthosoma <- crop(xanthosoma, nova_extensao)
-xanthosoma2 <- crop(xanthosoma2, nova_extensao)
-
-# Defina os limites (breaks) desejados
-breaks <- seq(0.00, 0.50, by = 0.05)
-
-# Crie os mapas com a mesma paleta e limites
-map <- tm_shape(amorosa) +
-  tm_raster(palette = "Oranges", style = "cont", alpha = 0.8, breaks = breaks,
-            title = "Suitability") +
-  tm_layout(frame.lwd = 3, legend.position = c("left", "bottom")) +
-  tm_scale_bar(position = c("right", "bottom"), width = 0.15)
-
-map2 <- tm_shape(amorosa2) +
-  tm_raster(palette = "Oranges", style = "cont", alpha = 0.8, breaks = breaks,
-            title = "Suitability") +
-  tm_layout(frame.lwd = 3, legend.position = c("left", "bottom")) +
-  tm_scale_bar(position = c("right", "bottom"), width = 0.15)
-
-map3 <- tm_shape(xanthosoma) +
-  tm_raster(palette = "Oranges", style = "cont", alpha = 0.8, breaks = breaks,
-            title = "Suitability") +
-  tm_layout(frame.lwd = 3, legend.position = c("left", "bottom")) +
-  tm_scale_bar(position = c("right", "bottom"), width = 0.15)
-
-map4 <- tm_shape(xanthosoma2) +
-  tm_raster(palette = "Oranges", style = "cont", alpha = 0.8, breaks = breaks,
-            title = "Suitability") +
-  tm_layout(frame.lwd = 3, legend.position = c("left", "bottom")) +
-  tm_scale_bar(position = c("right", "bottom"), width = 0.15)
-
-# Exiba os mapas
-arranjo1 <- tmap_arrange(map, map2, map3, map4, nrow = 2)
-
-tmap_save(tm = arranjo1, filename = "./cap2/media/mapssd.png", width = 3000, height = 2800)
-
 #MEAN AUC AND TSS ---------------------------------------------------------
 
-#creating mena statistics for error1
+#creating mean statistics for error1
 for(i in 1:length(study_sp)){
   
   #Read the statistics for every partition
@@ -146,13 +99,13 @@ for(i in 1:length(study_sp)){
   stat9 <- read_csv(paste0("./cap2/", study_sp[i], "_9/present/final_models/", study_sp[i], "_9_mean_statistics.csv"))
   stat10 <- read_csv(paste0("./cap2/", study_sp[i], "_10/present/final_models/", study_sp[i], "_10_mean_statistics.csv"))
 
-  # Adicionar a lista ao objeto global
+  #Add the list to the global object
   stat_list <- list(stat1, stat2, stat3, stat4, stat5, stat6, stat7, stat8, stat9, stat10)
 
- # Juntar todos os dataframes da lista em um único dataframe
+  #Combine all dataframes from the list into a single dataframe
 df_combined <- bind_rows(stat_list)
 
- # Calcular médias por grupo e selecionar as colunas necessárias
+ #Calculate the mean by group and select the necessary columns
 df_final <- df_combined %>%
   dplyr::select(-1) %>%
   separate(species_name, into = c("species_name", "number"), sep = "_") %>%
@@ -184,13 +137,13 @@ for(i in 1:length(study_sp)){
   stat9 <- read_csv(paste0("./cap2/", study_sp[i], "_19/present/final_models/", study_sp[i], "_19_mean_statistics.csv"))
   stat10 <- read_csv(paste0("./cap2/", study_sp[i], "_20/present/final_models/", study_sp[i], "_20_mean_statistics.csv"))
   
-  # Adicionar a lista ao objeto global
+  #Add the list to the global object
   stat_list <- list(stat1, stat2, stat3, stat4, stat5, stat6, stat7, stat8, stat9, stat10)
   
-  # Juntar todos os dataframes da lista em um único dataframe
+  #Combine all dataframes from the list into a single dataframe
   df_combined <- bind_rows(stat_list)
   
-  # Calcular médias por grupo e selecionar as colunas necessárias
+  #Calculate the mean by group and select the necessary columns
   df_final <- df_combined %>%
     dplyr::select(-1) %>%
     separate(species_name, into = c("species_name", "number"), sep = "_") %>%
@@ -209,25 +162,22 @@ for(i in 1:length(study_sp)){
 
 
 
-#HISTOGRAMAS -------------------------------------------------------------------
+#FREQUENCY POLYGONS -------------------------------------------------------------------
 
 for(i in 1:length(study_sp)){
   
-  #Ler os pontos de ocorrência
-  occs <-  read_csv("./Data/Processados/6_para_rodar_modelagem.csv")
-  
-  #Lendo os mapas de SDM com os dados originais, erro1 e erro2
+  #Reading the SDM maps with the original data, error1, and error2
   origi <- raster(paste0("./cap2/", study_sp[i], "/present/final_models/", study_sp[i], "_maxent_raw_mean.tif"))
   erro1 <- raster(paste0("./cap2/media/", study_sp[i], "_error1media.tif"))
   erro2 <- raster(paste0("./cap2/media/", study_sp[i], "_error2media.tif"))
  
-  #organizando planilhas pontos originais
+  #Organizing original points df
   occso <- occs %>%
     filter(str_detect(nome_cientifico, paste0(study_sp[i]))) %>%
     filter(is.na(erro)) %>%
     unite(coord, latitude, longitude, sep = ",", remove = FALSE)
   
-  #organizando planilhas pontos erro1
+  #Organizing original erro1 df
   occse1 <- occs %>%
     filter(str_detect(nome_cientifico, paste0(study_sp[i]))) %>%
     filter(is.na(erro) | erro == "sim") %>%
@@ -237,7 +187,7 @@ for(i in 1:length(study_sp)){
     dplyr::select(-numero, -numero2) %>%
     unite(coord, latitude, longitude, sep = ",", remove = FALSE)
   
-  #organizando planilhas pontos erro2
+  #Organizing original erro2 df
   occse2 <- occs %>%
     filter(str_detect(nome_cientifico, paste0(study_sp[i]))) %>%
     filter(is.na(erro) | erro == "sim") %>%
@@ -247,34 +197,34 @@ for(i in 1:length(study_sp)){
     dplyr::select(-numero, -numero2) %>%
     unite(coord, latitude, longitude, sep = ",", remove = FALSE)
  
-  #extrair valores pontos originais
+  #Extracting values from original points
   occso_sf <- st_as_sf(occso, coords = c("longitude", "latitude"), crs = st_crs(origi))
   valores_raster <- extract(origi, occso_sf)
   occso$valores_raster <- valores_raster
   occso <- occso %>%
     mutate(erro = ifelse(is.na(erro), "nao", erro))
   
-  #extrair valores pontos erro1
+  #Extracting values from original points
   occse1_sf <- st_as_sf(occse1, coords = c("longitude", "latitude"), crs = st_crs(erro1))
   valores_raster <- extract(erro1, occse1_sf)
   occse1$valores_raster <- valores_raster
   occse1 <- occse1 %>%
     mutate(erro = ifelse(is.na(erro), "nao", erro))
   
-  #salvando a planilha para usar depois 
+  #Saving the results
   write_csv(occse1, file = paste0("./cap2/estatisticas/", study_sp[i], "_valorrastererro1.csv"))
   
-  #extrair valores pontos erro2
+  #Extracting values from original points
   occse2_sf <- st_as_sf(occse2, coords = c("longitude", "latitude"), crs = st_crs(erro2))
   valores_raster <- extract(erro2, occse2_sf)
   occse2$valores_raster <- valores_raster
   occse2 <- occse2 %>%
     mutate(erro = ifelse(is.na(erro), "nao", erro))
   
-  #salvando a planilha para usar depois 
+  #Saving the results
   write_csv(occse2, file = paste0("./cap2/estatisticas/", study_sp[i], "_valorrastererro2.csv"))
   
-  #histograma para o original
+  #Frequency poligon from original points
   origig <- ggplot(occso, aes(valores_raster, colour = erro)) +
     geom_freqpoly(binwidth = 0.1, size = 1.7) +
     scale_color_manual(values = c("darkgray","darkorange")) +
@@ -283,10 +233,11 @@ for(i in 1:length(study_sp)){
     ylim(0, 15) +
     xlim(0, 1)
   
+  #saving this plot
   ggsave(filename = paste0("./cap2/histogramas/", study_sp[i], "_origihist.png"),
          plot = origig, device = "png", width = 10, height = 8, dpi = 300)
   
-  #histograma para o erro1
+  #Frequency poligon from erro1 points
   erro1g <- ggplot(occse1, aes(valores_raster, colour = erro)) +
       geom_freqpoly(binwidth = 0.1, size = 1.7) +
       scale_color_manual(values = c("darkgray","darkorange")) +
@@ -295,10 +246,11 @@ for(i in 1:length(study_sp)){
       ylim(0, 15) +
       xlim(0, 1)
   
+  #saving this plot
   ggsave(filename = paste0("./cap2/histogramas/", study_sp[i], "_error1hist.png"),
          plot = erro1g, device = "png", width = 10, height = 8, dpi = 300)
   
-  #histograma para o erro2
+  #Frequency poligon from erro2 points
   erro2g <- ggplot(occse2, aes(valores_raster, colour = erro)) +
     geom_freqpoly(binwidth = 0.1, size = 1.7) +
     scale_color_manual(values = c("darkgray","darkorange")) +
@@ -307,6 +259,7 @@ for(i in 1:length(study_sp)){
     ylim(0, 15) + 
     xlim(0, 1)
   
+  #saving this plot
   ggsave(filename = paste0("./cap2/histogramas/", study_sp[i], "_error2hist.png"),
          plot = erro2g, device = "png", width = 10, height = 8, dpi = 300)
   
